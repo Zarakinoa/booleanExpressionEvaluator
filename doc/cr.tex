@@ -1,0 +1,311 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage[french]{babel}
+\usepackage[framemethod=tikz]{mdframed}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+    backgroundcolor=\color{backgroundColour},   
+    commentstyle=\color{mGreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{mGray},
+    stringstyle=\color{mPurple},
+    basicstyle=\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    language=C
+}
+
+\title{Évaluation d’expressions arithmétiques \\ \large IN406 - Theorie des langages}
+\author{CHIKAR Soufiane LEFEBVRE Theo}
+\date{Mai 2019}
+
+\begin{document}
+
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+Le but du projet c'est d'évaluer les expressions booléennes sous forme infixe
+avec des parenthèses.
+
+Nous allons détailler la démarche de création d'un programme ayant pour but de 
+construire et de parcourir un arbre binaire des expressions arithmétiques 
+fondées sur une grammaire.
+
+Nous procédons par questions séparées afin de bien faire comprendre le processus de conception du programme.
+
+\newpage
+
+\section{Les Questions}
+
+\subsection{Question 1}
+Donner une grammaire reconnaissant le langage dont les mots sont les expressions arithmétiques
+définies ci-dessus.
+\begin{mdframed}[hidealllines=true,backgroundcolor=blue!20]
+On peut décrire le langage des expressions arithmétiques par les règles syntaxiques suivantes:
+
+\begin{itemize}
+\item Une expression est un nombre, ou
+\item le OU de deux expressions, ou
+\item l'implication de deux expressions, ou
+\item le ET de deux expressions, ou
+\item l'equivlence de deux expressions, ou
+\item une expression entre parenthèse.
+\end{itemize}
+<E> ::= <E> + <T> \\
+<E> ::= <E> <=> <T> || E> => <T> \\
+<E> ::= <T> \\\\
+<T> ::= <T>*<F>\\
+<T> ::= <F>\\\\
+<F> ::= \textit{true,false}\\
+<F> ::= (<E>) || !(<E>)\\\\
+<E>,<T> et <F> sont des expressions et des symboles non-terminaux.\\
++,<=>,=>,*,(,) et \textit{num} sont des symboles terminaux.\\
+<E> est le symbole de départ.
+\end{mdframed}
+
+\newpage
+\subsection{Question 2}
+Lire une chaîne de caractère contenant une expression booléennes et la transformer en une
+liste de tokens.
+\begin{lstlisting}[style=CStyle]
+typedef enum token_type_s
+ {
+     OPERATOR,
+     CONSTANTE,
+     NON,
+     PARENTHESE_DROITE,
+     PARENTHESE_GAUCHE,
+     UNKNOWN
+ } token_type_t;
+ 
+
+typedef struct token_s
+ {
+     char data;
+     token_type_t type;
+     struct token_s *next;
+ } token_t;
+ typedef struct token_s *token_list_t;
+
+
+ token_list_t expression_to_token_list(char *expression)
+ {
+     token_list_t token_list = NULL;
+     int len = strlen(expression);
+     int i = 1;
+ 
+     if (get_token_type(expression[i]) != UNKNOWN)
+         token_list = init_token_list(expression[0], get_token_type(expression[0]));
+
+     while (i < len)
+     {
+         if (get_token_type(expression[i]) != UNKNOWN)
+             token_list = append_token_list(token_list, expression[i], get_token_type(expression[i]));
+         i++;
+     }
+     return token_list;
+ }
+\end{lstlisting}
+
+\newpage
+
+\subsection{Question 3}
+
+À partir de la liste de tokens, vérifier si cette liste est correspond à une expression booléenne
+bien formée.
+
+\begin{lstlisting}[style=CStyle]
+  int check_token_list(token_list_t head)
+  {
+      int NB_LEFT_PARENTHESE = 0;
+      int NB_RIGHT_PARENTHESE = 0;
+      int NB_OPE_SUC = 0;
+      token_list_t cursor = head;
+      while (cursor != NULL)
+      {
+          /* On verifie le nombre de parenthese */
+          if (cursor->type == PARENTHESE_GAUCHE)
+              NB_LEFT_PARENTHESE += 1;
+  
+          if (cursor->type == PARENTHESE_DROITE)
+              NB_RIGHT_PARENTHESE += 1;
+  
+          /* On verifie s'il n'y a pas d'erreur de syntaxe, double operateur par                                  
+       * exemple */
+          if (cursor->next != NULL)
+          {
+              if (cursor->type == OPERATOR && cursor->next->type == cursor->type)
+                  NB_OPE_SUC += 1;
+              if (cursor->type == CONSTANTE && cursor->next->type == cursor->type)
+                  NB_OPE_SUC += 1;
+              if (cursor->type == NON && cursor->next->type == OPERATOR)
+                  NB_OPE_SUC += 1;
+              if (cursor->type == NON && cursor->next->type == PARENTHESE_DROITE)
+                  NB_OPE_SUC += 1;
+              if (cursor->type == PARENTHESE_GAUCHE && cursor->next->type == OPERATOR)
+                  NB_OPE_SUC += 1;
+          }
+          else if (cursor->type == OPERATOR && cursor->next == NULL)
+          {
+              NB_OPE_SUC += 1;
+          }
+          cursor = cursor->next;
+      }
+      if (NB_OPE_SUC == 0 && NB_LEFT_PARENTHESE == NB_RIGHT_PARENTHESE)
+      {
+          return 1;
+      }
+      else
+          return 0;
+  }
+\end{lstlisting}
+\newpage
+Définir le langage qui est l’ensemble des mots qui sont une liste de tokens correspondant à une expression
+arithmétique correcte. Vous devez donner l’alphabet et donner l’automate (éventuellement à pile) reconnaissant
+ce langage.
+
+\begin{mdframed}[hidealllines=true,backgroundcolor=blue!20]
+On considère l'alphabet A = \{\textit{true,false},+,*,<=>,=>\} et le langage L = \{w $\in$ $\Sigma$* | w est une expression arithmétique\}:
+\begin{center}
+\begin{tikzpicture}[scale=0.2]
+\tikzstyle{every node}+=[inner sep=0pt]
+\draw [black] (15,-35.2) circle (3);
+\draw (15,-35.2) node {$q_0$};
+\draw [black] (31.4,-35.2) circle (3);
+\draw (31.4,-35.2) node {$q_1$};
+\draw [black] (51.4,-35.2) circle (3);
+\draw (51.4,-35.2) node {$q_2$};
+\draw [black] (69.8,-35.2) circle (3);
+\draw (69.8,-35.2) node {$q_3$};
+\draw [black] (69.8,-35.2) circle (2.4);
+\draw [black] (8.3,-36.4) -- (12.05,-35.73);
+\draw (7.58,-36.66) node [left] {$start$};
+\fill [black] (12.05,-35.73) -- (11.17,-35.38) -- (11.35,-36.36);
+\draw [black] (18,-35.2) -- (28.4,-35.2);
+\fill [black] (28.4,-35.2) -- (27.6,-34.7) -- (27.6,-35.7);
+\draw [black] (30.077,-32.52) arc (234:-54:2.25);
+\draw (31.4,-27.95) node [above] {$(,\mbox{ }\mbox{ }\uparrow\mbox{ }($};
+\fill [black] (32.72,-32.52) -- (33.6,-32.17) -- (32.79,-31.58);
+\draw [black] (33.877,-33.515) arc (118.73149:61.26851:15.65);
+\fill [black] (48.92,-33.52) -- (48.46,-32.69) -- (47.98,-33.57);
+\draw (41.4,-31.09) node [above] {$not,true,false$};
+\draw [black] (50.077,-32.52) arc (234:-54:2.25);
+\draw (51.4,-27.95) node [above] {$),\downarrow$};
+\fill [black] (52.72,-32.52) -- (53.6,-32.17) -- (52.79,-31.58);
+\draw [black] (54.4,-35.2) -- (66.8,-35.2);
+\fill [black] (66.8,-35.2) -- (66,-34.7) -- (66,-35.7);
+\draw (60.6,-35.7) node [below] {$\delta$};
+\draw [black] (49.212,-37.243) arc (-53.50496:-126.49504:13.135);
+\fill [black] (33.59,-37.24) -- (33.93,-38.12) -- (34.53,-37.32);
+\draw (41.4,-40.32) node [below] {$+,*,=,>$};
+\end{tikzpicture}
+\end{center}
+\end{mdframed}
+
+\newpage
+
+\subsection{Question 4}
+À partir de la liste de tokens créer l’arbre représentant l’expression arithmétique.
+
+\begin{lstlisting}[style=CStyle]
+typedef struct token_tree_s token_tree_t;
+struct token_tree_s {
+  token_t token;
+  token_tree_t *parent;
+  token_tree_t *left;
+  token_tree_t *right;
+};
+token_tree_t *insert_token_tree(token_tree_t *root, token_t token) {
+  if (root == NULL) {
+    root = new_tree(token);
+  } else {
+    token_tree_t *cursor = root;
+    while (cursor != NULL) {
+      // Seul les operateurs peuvent avoir des fils
+      if (cursor->token.type == OPERATOR) {
+        if (cursor->left == NULL) {
+          cursor->left = new_tree(token);
+          return root;
+        } else if (cursor->right == NULL) {
+          cursor->right = new_tree(token);
+          return root;
+        } else {
+          if (cursor->left->token.type == OPERATOR) {
+            cursor = cursor->left;
+            continue;
+          } else if (cursor->right->token.type == OPERATOR) {
+            cursor = cursor->right;
+            continue;
+          } else {
+            cursor = cursor->parent->right;
+            continue;
+          }
+        }
+      } else {
+        perror("Error, only nodes who hold operators can have children.");
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+}
+\end{lstlisting}
+\newpage
+\subsection{Question 5}
+Calculer la valeur de l’expression arithmétique et afficher le résultat
+\begin{lstlisting}[style=CStyle]
+  bool evaluate_tree(token_tree_t *treenode)
+  {
+      bool x, y;
+  
+      if (treenode->token.type == OPERATOR)
+      {
+          x = evaluate_tree(treenode->left);
+          y = evaluate_tree(treenode->right);
+  
+          if (treenode->token.data == '*')
+              return et(x, y);
+          else if (treenode->token.data == '+')
+              return ou(x, y);
+          else if (treenode->token.data == '=')
+          {
+              return eqv(x, y);
+          }
+          else if (treenode->token.data == '>')
+              return imp(x, y);
+      }
+      else
+      {
+          return atoi(&treenode->token.data);
+      }
+  }
+\end{lstlisting}
+
+\subsection{Question 6}
+Le programme que vous devez rendre doit prendre en argument la chaîne de caractère et afficher son évaluation ou bien "éxpression incorrecte".
+
+Voir Code.
+
+\end{document} 
